@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Life Radar</title>
+<style>
+  :root {
+    --bg: #fbf3ea;
+    --ink: #1f2440;
+    --muted: #7a6f66;
+    --grid: rgba(31, 36, 64, 0.12);
+    --fill: rgba(214, 123, 138, 0.35);
+    --line: #8c2f39;
+    --prev: #7d9475;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #191919;
+      --ink: #f3e9df;
+      --muted: #b3a79c;
+      --grid: rgba(243, 233, 223, 0.14);
+      --fill: rgba(214, 123, 138, 0.38);
+      --line: #e29aa5;
+      --prev: #a9c19f;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: Georgia, "Times New Roman", serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+  }
+  header { text-align: center; margin-bottom: 4px; }
+  h1 { font-size: 20px; font-weight: normal; margin: 0; letter-spacing: 0.02em; }
+  .avg { font-size: 13px; color: var(--muted); margin-top: 2px; font-family: -apple-system, system-ui, sans-serif; }
+  .wrap { position: relative; width: 100%; max-width: 520px; flex: 1; min-height: 280px; }
+  .empty { max-width: 420px; font-family: -apple-system, system-ui, sans-serif; font-size: 14px; line-height: 1.5; color: var(--muted); text-align: center; margin-top: 40px; }
+  code { background: var(--grid); padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Life Radar</h1>
+  <div class="avg" id="avg"></div>
+</header>
+<div class="wrap" id="wrap"><canvas id="chart" aria-label="Radar chart of life area scores"></canvas></div>
+<div class="empty" id="empty" hidden>
+  Add six scores from 1 to 10 after <code>#s=</code> in the address, in this order:
+  Finances, Relationships, Personal goals, Business, Health, Spirituality.<br><br>
+  Example: <code>#s=6,8,7,5,7,6&amp;t=Q4 2026</code><br><br>
+  Your scores never leave your browser.
+</div>
+<script src="chart.umd.min.js"></script>
+<script>
+  // Everything is read from the URL fragment (#...), which browsers never send to a server.
+  const LABELS = ["Finances", "Relationships", "Personal goals", "Business", "Health", "Spirituality"];
+  const params = new URLSearchParams(location.hash.replace(/^#/, ""));
+
+  function parseScores(raw) {
+    if (!raw) return null;
+    const vals = raw.split(",").map(v => {
+      const n = parseFloat(v);
+      return Number.isFinite(n) ? Math.min(10, Math.max(0, n)) : 0;
+    });
+    while (vals.length < LABELS.length) vals.push(0);
+    return vals.slice(0, LABELS.length);
+  }
+
+  const scores = parseScores(params.get("s"));
+  const prev = parseScores(params.get("p"));
+  const title = (params.get("t") || "").slice(0, 80);
+  const css = getComputedStyle(document.documentElement);
+  const v = name => css.getPropertyValue(name).trim();
+
+  if (!scores) {
+    document.getElementById("wrap").hidden = true;
+    document.getElementById("empty").hidden = false;
+  } else {
+    if (title) document.getElementById("title").textContent = title;
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    document.getElementById("avg").textContent = "Average " + avg.toFixed(1) + " / 10";
+
+    const datasets = [{
+      label: title || "This quarter",
+      data: scores,
+      backgroundColor: v("--fill"),
+      borderColor: v("--line"),
+      borderWidth: 2.5,
+      pointBackgroundColor: v("--line"),
+      pointRadius: 3.5
+    }];
+    if (prev) {
+      datasets.push({
+        label: "Last quarter",
+        data: prev,
+        backgroundColor: "transparent",
+        borderColor: v("--prev"),
+        borderDash: [6, 4],
+        borderWidth: 2,
+        pointRadius: 2.5,
+        pointBackgroundColor: v("--prev")
+      });
+    }
+
+    new Chart(document.getElementById("chart"), {
+      type: "radar",
+      data: { labels: LABELS, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: !!prev, labels: { color: v("--muted"), boxWidth: 14 } },
+          tooltip: { callbacks: { label: c => c.dataset.label + ": " + c.formattedValue } }
+        },
+        scales: {
+          r: {
+            min: 0,
+            max: 10,
+            ticks: { stepSize: 2, color: v("--muted"), backdropColor: "transparent", font: { size: 10 } },
+            grid: { color: v("--grid") },
+            angleLines: { color: v("--grid") },
+            pointLabels: { color: v("--ink"), font: { family: "Georgia, serif", size: 13 } }
+          }
+        }
+      }
+    });
+  }
+  window.addEventListener("hashchange", () => location.reload());
+</script>
+</body>
+</html>
